@@ -39,7 +39,7 @@ class Configuration(object):
         >>> config.get('group.one')
         1
         >>> config.sources()
-        {'group.one': 'original', 'group.two': 'override'}
+        {'original': ['group.one'], 'override': ['group.two']}
     """
     _caches = dict()
 
