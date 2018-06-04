@@ -1,6 +1,6 @@
 import re
 from collections import namedtuple
-from configuration import Configuration
+from configuration.simple_configuration import Configuration
 
 
 '''
@@ -116,6 +116,7 @@ class AdvancedConfiguration(Configuration):
         # If forced, ensure the symbol doesn't appear in either dict
         cls._modifiers.pop(symbol, None)
         cls._actions[symbol] = func
+        # TODO: remove original ordering if forced
         cls._ordering.insert(index_order or len(cls._ordering), symbol)
 
     @classmethod
@@ -134,6 +135,7 @@ class AdvancedConfiguration(Configuration):
         # If forced, ensure the symbol doesn't appear in either dict
         cls._actions.pop(symbol, None)
         cls._modifiers[symbol] = func
+        # TODO: remove original ordering if forced
         cls._ordering.insert(index_order or len(cls._ordering), symbol)
 
     @classmethod

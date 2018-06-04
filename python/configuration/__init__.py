@@ -1,1 +1,2 @@
-from .configuration import Configuration
+from .advanced_configuration import AdvancedConfiguration
+from .simple_configuration import Configuration
