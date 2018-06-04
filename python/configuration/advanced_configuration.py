@@ -1,5 +1,5 @@
 import re
-
+from collections import namedtuple
 from configuration import Configuration
 
 
@@ -11,20 +11,16 @@ Merge methods:
 Special methods:
     # : Locks a key so it can't be overridden
 
-Merge modifiers: (Skips operation if match returns False)
+Merge modifiers:
     ! : Only perform the merge operation if the value doesn't exist yet
     ? : Only perform the merge operation if the value exists
-
-    * Modifiers should be passed the operation string and values. This way, they
-    could even be used to perform a 'super' operation, and return False to finish.
-    They could also better assess whether or not to perform the operation.
 
 Multiple keys with different operations can be performed in one go. These are 
 done based on the method_resolution_order. Default is: '+-#!?'
 
-<MODIFIER><METHOD><LOCK>KEY
+[MODIFIER][METHOD][LOCK]KEY
 
-Source values should be a list of all configs that modify the key. 
+Source values are a list of all configs that modify the key. 
 
 Examples:
     '+KEY' - Add the key's values
@@ -34,7 +30,8 @@ Examples:
     '!#KEY' - Only set and lock the key if it doesn't exist yet
     '?+#KEY' - Only add to and lock the key if it exists
     
-    '+KEY', '-KEY' - (separate keys, same config dict) Add and remove values
+    '+KEY', '-KEY' - (separate keys, same config dict) Add and remove values.
+                    Order of operations is defined by the ordering attribute
 
 QUESTIONS:
     * Should the modifiers check whether the value is None, or if the key is present?
@@ -43,13 +40,57 @@ QUESTIONS:
 '''
 
 
-from collections import namedtuple
-
-
 SeparatedKey = namedtuple('SeparatedKey', ['key', 'modifiers', 'action', 'lock', 'true_key'])
 
 
+# ======================================================================== #
+#                                 ACTIONS                                  #
+# ======================================================================== #
+
+def _add(orig, new):
+    return orig + new
+
+
+def _subtract(orig, new):
+    if isinstance(orig, list):
+        if isinstance(new, list):
+            for x in new:
+                orig.remove(x)
+        else:
+            orig.remove(new)
+    elif isinstance(orig, (int, float)):
+        orig -= new
+    elif isinstance(orig, str):
+        if orig.endswith(new):
+            orig = orig[:-len(new)]
+    return orig
+
+
+# ======================================================================== #
+#                                MODIFIERS                                 #
+# ======================================================================== #
+
+def _exists(action, key, orig, new):
+    return orig is not None
+
+
+def _not_exists(action, key, orig, new):
+    return orig is None
+
+
 class AdvancedConfiguration(Configuration):
+    _actions = {
+        '+': _add,
+        '-': _subtract,
+    }
+    _modifiers = {
+        '!': _not_exists,
+        '?': _exists,
+    }
+    _ordering = list('+-!?')
+    lock_symbol = '#'
+    pattern = None
+
     def __init__(self, data=None, name=None, separator='.'):
         """
         :param dict     data:       Dictionary of seed data
@@ -58,20 +99,69 @@ class AdvancedConfiguration(Configuration):
         """
         super(AdvancedConfiguration, self).__init__(data, name, separator)
         self._locked = set()
-        self._lock_symbol = '#'
-
-        self._actions = {
-            '+': self._add,
-            '-': self._subtract,
-        }
-        self._modifiers = {
-            '!': self._not_exists,
-            '?': self._exists,
-        }
-        self._ordering = list('+-!?')
-        self.pattern = None
-
         self.__pending_lock = set()
+
+    @classmethod
+    def register_action(cls, symbol, func, force=False, index_order=None):
+        """
+        Registers a callable to a symbol as an action. If the symbol already
+        exists as a modifier or action, and force is not True, an error is raised.
+
+        :param str  symbol:         Character to represent the action
+        :param      func:           Callable to perform when symbol is used
+        :param bool force:          Whether or not to override existing uses of symbol
+        :param int  index_order:    The order to perform the action.
+        """
+        if not force and (symbol in cls._modifiers or symbol in cls._actions):
+            raise ValueError
+        # If forced, ensure the symbol doesn't appear in either dict
+        cls._modifiers.pop(symbol, None)
+        cls._actions[symbol] = func
+        cls._ordering.insert(index_order or len(cls._ordering), symbol)
+
+    @classmethod
+    def register_modifier(cls, symbol, func, force=False, index_order=None):
+        """
+        Registers a callable to a symbols a modifier. If the symbol already
+        exists as a modifier or action, and force is not True, an error is raised.
+
+        :param str  symbol:         Character to represent the action
+        :param      func:           Callable to perform when symbol is used
+        :param bool force:          Whether or not to override existing uses of symbol
+        :param int  index_order:    The order to perform the action.
+        """
+        if not force and (symbol in cls._modifiers or symbol in cls._actions):
+            raise ValueError
+        # If forced, ensure the symbol doesn't appear in either dict
+        cls._actions.pop(symbol, None)
+        cls._modifiers[symbol] = func
+        cls._ordering.insert(index_order or len(cls._ordering), symbol)
+
+    @classmethod
+    def set_ordering(cls, order):
+        """
+        Explicitly sets the order that key operations should be performed in.
+        Note, actions in a key are performed in the order they are given, this
+        is for when multiple actions are called on the same key, and the order
+        in which to resolve.
+
+        Example:
+            An ordering of '+?' will cause additions to be run first, followed
+            by anything with a modifier of '?', even if the action was '+'.
+
+        :param list|str order: Symbol ordering
+        """
+        cls._ordering = list(order)
+
+    @classmethod
+    def _compile(cls):
+        """
+        Compiles the regex pattern for merging
+        """
+        mod_pattern = '([\\' + '\\'.join(cls._modifiers.keys()) + ']+)?'
+        meth_pattern = '([\\' + '\\'.join(cls._actions.keys()) + '])?'
+        lock_pattern = '({})?'.format(cls.lock_symbol)
+        cls.pattern = re.compile('^' + mod_pattern + meth_pattern + lock_pattern + '(\w+)' + '$')
 
     def is_locked(self, key):
         """
@@ -95,53 +185,6 @@ class AdvancedConfiguration(Configuration):
         :param str key:
         """
         self._locked.add(key)
-
-    def register_action(self, symbol, func, force=False, index_order=None):
-        """
-        Registers a callable to a symbol as an action. If the symbol already
-        exists as a modifier or action, and force is not True, an error is raised.
-
-        :param str  symbol:         Character to represent the action
-        :param      func:           Callable to perform when symbol is used
-        :param bool force:          Whether or not to override existing uses of symbol
-        :param int  index_order:    The order to perform the action.
-        """
-        # TODO: force might need to extract the symbol from the other dict
-        if not force and (symbol in self._modifiers or symbol in self._actions):
-            raise ValueError
-        self._actions[symbol] = func
-        self._ordering.insert(index_order or len(self._ordering), symbol)
-
-    def register_modifier(self, symbol, func, force=False, index_order=None):
-        """
-        Registers a callable to a symbols a modifier. If the symbol already
-        exists as a modifier or action, and force is not True, an error is raised.
-
-        :param str  symbol:         Character to represent the action
-        :param      func:           Callable to perform when symbol is used
-        :param bool force:          Whether or not to override existing uses of symbol
-        :param int  index_order:    The order to perform the action.
-        """
-        # TODO: force might need to extract the symbol from the other dict
-        if not force and (symbol in self._modifiers or symbol in self._actions):
-            raise ValueError
-        self._modifiers[symbol] = func
-        self._ordering.insert(index_order or len(self._ordering), symbol)
-
-    def set_ordering(self, order):
-        """
-        Explicitly sets the order that key operations should be performed in.
-        Note, actions in a key are performed in the order they are given, this
-        is for when multiple actions are called on the same key, and the order
-        in which to resolve.
-
-        Example:
-            An ordering of '+?' will cause additions to be run first, followed
-            by anything with a modifier of '?', even if the action was '+'.
-
-        :param list|str order: Symbol ordering
-        """
-        self._ordering = list(order)
 
     def merge(self, data, name=None):
         """
@@ -201,15 +244,6 @@ class AdvancedConfiguration(Configuration):
             sources.setdefault(source_list[-1], list()).append(nested_key)
 
         return sources
-
-    def _compile(self):
-        """
-        Compiles the regex pattern for merging
-        """
-        mod_pattern = '([\\' + '\\'.join(self._modifiers.keys()) + ']+)?'
-        meth_pattern = '([\\' + '\\'.join(self._actions.keys()) + '])?'
-        lock_pattern = '({})?'.format(self._lock_symbol)
-        self.pattern = re.compile('^' + mod_pattern + meth_pattern + lock_pattern + '(\w+)' + '$')
 
     def _apply_modifiers(self, sep_key, existing_value, new_value):
         """
@@ -345,48 +379,19 @@ class AdvancedConfiguration(Configuration):
         # reverse of the actual key
         return separated_key.true_key, separated_key.lock, action_index, mod_indexes
 
-    # ======================================================================== #
-    #                                 ACTIONS                                  #
-    # ======================================================================== #
-
-    @staticmethod
-    def _add(orig, new):
-        return orig + new
-
-    @staticmethod
-    def _subtract(orig, new):
-        if isinstance(orig, list):
-            if isinstance(new, list):
-                for x in new:
-                    orig.remove(x)
-            else:
-                orig.remove(new)
-        elif isinstance(orig, (int, float)):
-            orig -= new
-        elif isinstance(orig, str):
-            if orig.endswith(new):
-                orig = orig[:-len(new)]
-        return orig
-
-    # ======================================================================== #
-    #                                MODIFIERS                                 #
-    # ======================================================================== #
-
-    @staticmethod
-    def _exists(action, key, orig, new):
-        return orig is not None
-
-    @staticmethod
-    def _not_exists(action, key, orig, new):
-        return orig is None
-
 
 if __name__ == '__main__':
+    def custom_method(orig, new):
+        return int(str(orig) + str(new))
+
+    AdvancedConfiguration.register_action('$', custom_method)
+
     path1 = r'D:\Programming\configuration\examples\data1.json'
-    path2 = r'D:\Programming\configuration\examples\data3.json'
-    cfg = AdvancedConfiguration.from_files(path1, path2)
+    # path2 = r'D:\Programming\configuration\examples\data3.json'
+    custom_path = r'D:\Programming\configuration\examples\custom_data.json'
+    cfg = AdvancedConfiguration.from_files(path1, custom_path)
     print(cfg.as_dict())
     print(cfg.sources())
     print(cfg.source('list'))
     print(cfg.locked())
-    cfg.set('group.one', 'abc')
+    # cfg.set('group.one', 'abc')
