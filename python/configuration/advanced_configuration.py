@@ -43,6 +43,10 @@ QUESTIONS:
 SeparatedKey = namedtuple('SeparatedKey', ['key', 'modifiers', 'action', 'lock', 'true_key'])
 
 
+class ConfigurationError(Exception):
+    pass
+
+
 # ======================================================================== #
 #                                 ACTIONS                                  #
 # ======================================================================== #
@@ -113,7 +117,7 @@ class AdvancedConfiguration(Configuration):
         :param int  index_order:    The order to perform the action.
         """
         if not force and (symbol in cls._modifiers or symbol in cls._actions):
-            raise ValueError
+            raise ConfigurationError('Symbol is already in use: {}'.format(symbol))
         # If forced, ensure the symbol doesn't appear in either dict
         cls._modifiers.pop(symbol, None)
         cls._actions[symbol] = func
@@ -131,7 +135,7 @@ class AdvancedConfiguration(Configuration):
         :param int  index_order:    The order to perform the action.
         """
         if not force and (symbol in cls._modifiers or symbol in cls._actions):
-            raise ValueError
+            raise ConfigurationError('Symbol is already in use: {}'.format(symbol))
         # If forced, ensure the symbol doesn't appear in either dict
         cls._actions.pop(symbol, None)
         cls._modifiers[symbol] = func
@@ -229,7 +233,7 @@ class AdvancedConfiguration(Configuration):
         """
         locked = self._get_locked_key(key)
         if locked:
-            raise ValueError('Key is locked: {}'.format(locked))
+            raise ConfigurationError('Key is locked: {}'.format(locked))
         return super(AdvancedConfiguration, self).set(key, value)
 
     def sources(self):
@@ -281,15 +285,6 @@ class AdvancedConfiguration(Configuration):
         :param object   name:   Identifier for the source data
         :param str      path:   Nested key path
         """
-
-        '''
-        Separate all actions
-        Order actions
-        For each action...
-            Run modifiers
-            Run action
-            Recurse
-        '''
         # Separate
         split = [self._separate(key) for key in source]
 
@@ -300,7 +295,7 @@ class AdvancedConfiguration(Configuration):
         for sep_key in ordered:
             key_path = path + self._separator + sep_key.true_key if path else sep_key.true_key
             if key_path in self._locked:
-                raise ValueError('Key is locked: {}'.format(key_path))
+                raise ConfigurationError('Key is locked: {}'.format(key_path))
 
             existing_value = dest.get(sep_key.true_key)
             new_value = source[sep_key.key]
@@ -333,7 +328,9 @@ class AdvancedConfiguration(Configuration):
 
             # Track any modifications to the key
             if key_modified:
-                self._sources.setdefault(key_path, []).append(name)
+                sources = self._sources.setdefault(key_path, [])
+                if name not in sources:
+                    sources.append(name)
 
     def _separate(self, key):
         """
@@ -343,14 +340,14 @@ class AdvancedConfiguration(Configuration):
             Lock        - The lock symbol if present
             Key         - The true key name
 
-        :raise ValueError: if key does not match the correct template
+        :raise ConfigurationError: if key does not match the correct template
 
         :param str key:
         :rtype: namedtuple[str, str, str, str, str]
         """
         match = re.match(self.pattern, key)
         if match is None:
-            raise ValueError
+            raise ConfigurationError('Unknown key: {}'.format(key))
         return SeparatedKey(key, *match.groups())
 
     def _sort_order(self, separated_key):
@@ -394,4 +391,4 @@ if __name__ == '__main__':
     print(cfg.sources())
     print(cfg.source('list'))
     print(cfg.locked())
-    # cfg.set('group.one', 'abc')
+    cfg.set('group.one', 'abc')
