@@ -32,11 +32,6 @@ Examples:
     
     '+KEY', '-KEY' - (separate keys, same config dict) Add and remove values.
                     Order of operations is defined by the ordering attribute
-
-QUESTIONS:
-    * Should the modifiers check whether the value is None, or if the key is present?
-    * Should source values be a list in the standard Configuration?
-
 '''
 
 
@@ -158,7 +153,7 @@ class AdvancedConfiguration(Configuration):
         cls._ordering = list(order)
 
     @classmethod
-    def _compile(cls):
+    def recompile(cls):
         """
         Compiles the regex pattern for merging
         """
@@ -218,7 +213,7 @@ class AdvancedConfiguration(Configuration):
         :param dict     data:   Dictionary of data to merge in
         :param object   name:   Identifier for the source data
         """
-        self._compile()
+        self.recompile()
         super(AdvancedConfiguration, self).merge(data, name=name)
         self._locked.update(self.__pending_lock)
         self.__pending_lock = set()
@@ -300,8 +295,6 @@ class AdvancedConfiguration(Configuration):
             existing_value = dest.get(sep_key.true_key)
             new_value = source[sep_key.key]
 
-            # TODO: Track key_modified in modifiers as well
-            # TODO: Should modifiers take the source + dest dict and keys for full control?
             if sep_key.modifiers and not self._apply_modifiers(sep_key, existing_value, new_value):
                 continue
 
