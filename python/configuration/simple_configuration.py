@@ -198,7 +198,7 @@ class Configuration(object):
         return config
 
     @classmethod
-    def from_environment(cls, env_var, cached=False):
+    def from_environment(cls, env_var, cached=True):
         """
         Reads paths from a given environment variable and merges their data into
         a single Configuration. Files are read in order, with the last path
