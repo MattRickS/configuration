@@ -251,9 +251,9 @@ class AdvancedConfiguration(Configuration):
 
         :rtype: dict
         """
-        sources = dict()
+        sources = {}
         for nested_key, source_list in self._sources.items():
-            sources.setdefault(source_list[-1], list()).append(nested_key)
+            sources.setdefault(source_list[-1], []).append(nested_key)
 
         return sources
 
@@ -346,7 +346,7 @@ class AdvancedConfiguration(Configuration):
                 key_modified = True
 
             if isinstance(new_value, dict):
-                node = dest.setdefault(sep_key.true_key, dict())
+                node = dest.setdefault(sep_key.true_key, {})
                 self._merge(new_value, node, name, key_path)
             else:
                 dest[sep_key.true_key] = new_value
