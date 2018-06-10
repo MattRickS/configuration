@@ -1,6 +1,13 @@
 import os
 import json
 
+# Python 2 and 3 compatible zip_longest
+import sys
+if sys.version_info[0] < 3:
+    from itertools import izip_longest as zip_longest
+else:
+    from itertools import zip_longest
+
 
 class Configuration(object):
     """
@@ -41,7 +48,7 @@ class Configuration(object):
         >>> config.sources()
         {'original': ['group.one'], 'override': ['group.two']}
     """
-    _caches = dict()
+    _caches = {}
 
     def __init__(self, data=None, name=None, separator='.'):
         """
@@ -49,10 +56,10 @@ class Configuration(object):
         :param object   name:       Identifier for the seed data
         :param str      separator:  String separator for nested keys
         """
-        self._data = dict()
+        self._data = {}
         self._count = 0
         self._separator = separator
-        self._sources = dict()
+        self._sources = {}
 
         if data:
             self.merge(data, name)
@@ -96,7 +103,7 @@ class Configuration(object):
         :rtype: Configuration
         """
         config = cls()
-        for data, name in zip(dicts, names or list()):
+        for data, name in zip_longest(dicts, names or []):
             config.merge(data, name=name)
         return config
 
@@ -232,9 +239,9 @@ class Configuration(object):
 
         :rtype: dict
         """
-        sources = dict()
+        sources = {}
         for nested_key, source_id in self._sources.items():
-            sources.setdefault(source_id, list()).append(nested_key)
+            sources.setdefault(source_id, []).append(nested_key)
 
         return sources
 
@@ -248,7 +255,7 @@ class Configuration(object):
         for key, value in source.items():
             key_path = path + self._separator + key if path else key
             if isinstance(value, dict):
-                node = dest.setdefault(key, dict())
+                node = dest.setdefault(key, {})
                 self._merge(value, node, name, key_path)
             else:
                 dest[key] = value
