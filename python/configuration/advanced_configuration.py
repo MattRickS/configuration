@@ -1,5 +1,6 @@
 import re
 from collections import namedtuple
+from configuration.errors import *
 from configuration.simple_configuration import Configuration
 
 
@@ -37,10 +38,6 @@ Examples:
 
 
 SeparatedKey = namedtuple('SeparatedKey', ['key', 'modifiers', 'action', 'lock', 'true_key'])
-
-
-class ConfigurationError(Exception):
-    pass
 
 
 # ======================================================================== #
@@ -117,7 +114,7 @@ class AdvancedConfiguration(Configuration):
         :param int  index_order:    The order to perform the action.
         """
         if not force and (symbol in cls._modifiers or symbol in cls._actions):
-            raise ConfigurationError('Symbol is already in use: {}'.format(symbol))
+            raise SymbolError('Symbol is already in use: {}'.format(symbol))
         # If forced, ensure the symbol doesn't appear in either dict
         cls._modifiers.pop(symbol, None)
         cls._actions[symbol] = func
@@ -136,7 +133,7 @@ class AdvancedConfiguration(Configuration):
         :param int  index_order:    The order to perform the action.
         """
         if not force and (symbol in cls._modifiers or symbol in cls._actions):
-            raise ConfigurationError('Symbol is already in use: {}'.format(symbol))
+            raise SymbolError('Symbol is already in use: {}'.format(symbol))
         # If forced, ensure the symbol doesn't appear in either dict
         cls._actions.pop(symbol, None)
         cls._modifiers[symbol] = func
@@ -241,12 +238,14 @@ class AdvancedConfiguration(Configuration):
         Sets a value in the configuration. This is not written to file and is
         only stored as long as the Configuration instance is in scope.
 
+        :raise LockError: if the key or any of it's ancestors are locked
+
         :param str      key:    Nested path of key names
         :param object   value:
         """
         locked = self._get_locked_key(key)
         if locked:
-            raise ConfigurationError('Key is locked: {}'.format(locked))
+            raise LockError('Key is locked: {}'.format(locked))
         return super(AdvancedConfiguration, self).set(key, value)
 
     def sources(self):
@@ -319,6 +318,8 @@ class AdvancedConfiguration(Configuration):
 
     def _merge(self, source, dest, name, path=''):
         """
+        :raise LockError: if any of the keys being modified are locked
+
         :param dict     source: Dictionary to merge from
         :param dict     dest:   Dictionary to merge into
         :param object   name:   Identifier for the source data
@@ -334,7 +335,7 @@ class AdvancedConfiguration(Configuration):
         for sep_key in ordered:
             key_path = path + self._separator + sep_key.true_key if path else sep_key.true_key
             if key_path in self._locked:
-                raise ConfigurationError('Key is locked: {}'.format(key_path))
+                raise LockError('Key is locked: {}'.format(key_path))
 
             existing_value = dest.get(sep_key.true_key)
             new_value = source[sep_key.key]
