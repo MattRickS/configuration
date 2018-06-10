@@ -252,13 +252,15 @@ class AdvancedConfiguration(Configuration):
         """
         Return a dictionary mapping the source identifiers to all the keys it
         contributed to the current state.
+        Note, if a key overrides an existing key (ie, has no explicit action),
+        then it is considered the only source for that key.
 
         :rtype: dict
         """
         sources = {key: [] for key in self._merge_order}
         for nested_key, source_list in self._sources.items():
-            last_identifier = source_list[-1]
-            sources[last_identifier].append(nested_key)
+            for source in source_list:
+                sources[source].append(nested_key)
 
         return sources
 
@@ -358,6 +360,18 @@ class AdvancedConfiguration(Configuration):
             else:
                 dest[sep_key.true_key] = new_value
                 key_modified = True
+
+                # If a leaf key replaces a dict, remove all sources that were lost
+                if isinstance(existing_value, dict):
+                    removed = {key for key in self._sources if key.startswith(key_path)}
+                    for key in removed:
+                        self._sources.pop(key, None)
+
+                # If no action was given, the value is overridden, meaning any
+                # previous sources have not contributed anything to the new value.
+                # Note, sources are only stored for leaf values, not dicts
+                if not sep_key.action:
+                    self._sources[key_path] = []
 
             # Locked keys wait until all their data has been merged before locking
             if sep_key.lock:
