@@ -66,112 +66,6 @@ class Configuration(object):
     def __setitem__(self, key, value):
         self.set(key, value)
 
-    def as_dict(self):
-        """
-        Returns a deep copy of the configuration in it's current state
-
-        :rtype: dict
-        """
-        from copy import deepcopy
-        return deepcopy(self._data)
-
-    def cache(self, name):
-        """
-        Caches the configuration under the given name. This can be retrieved
-        using the Configuration.from_cache() method.
-
-        :param str  name:
-        """
-        Configuration._caches[name] = self
-
-    def get(self, key):
-        """
-        Retrieves a value from the configuration. Can be a nested key joined
-        by the configuration separator (default '.').
-
-        :param str      key:    Nested path of key names
-        :return: Value stored at the given key location
-        """
-        data, key = self._walk(key)
-        return data[key]
-
-    def merge(self, data, name=None):
-        """
-        Writes the leaf keys of the data into the Configuration, overriding
-        conflicts. A name value can be provided as an identifier for where the
-        values originated. If omitted, an integer count is used instead.
-
-        :param dict     data:   Dictionary of data to merge in
-        :param object   name:   Identifier for the source data
-        """
-        self._merge(data, self._data, name or self._count)
-        self._count += 1
-
-    def set(self, key, value):
-        """
-        Sets a value in the configuration. This is not written to file and is
-        only stored as long as the Configuration instance is in scope.
-
-        :param str      key:    Nested path of key names
-        :param object   value:
-        """
-        data, key = self._walk(key)
-        data[key] = value
-
-    def source(self, key):
-        """
-        Returns the source identifier for the given key.
-
-        :param str      key:    Nested path of key names
-        :rtype: object
-        """
-        return self._sources[key]
-
-    def sources(self):
-        """
-        Return a dictionary mapping the source identifiers to all the keys it
-        contributed to the current state.
-
-        :rtype: dict
-        """
-        sources = dict()
-        for nested_key, source_id in self._sources.items():
-            sources.setdefault(source_id, list()).append(nested_key)
-
-        return sources
-
-    def _merge(self, source, dest, name, path=''):
-        """
-        :param dict     source: Dictionary to merge from
-        :param dict     dest:   Dictionary to merge into
-        :param object   name:   Identifier for the source data
-        :param str      path:   Nested key path
-        """
-        for key, value in source.items():
-            key_path = path + self._separator + key if path else key
-            if isinstance(value, dict):
-                node = dest.setdefault(key, dict())
-                self._merge(value, node, name, key_path)
-            else:
-                dest[key] = value
-                self._sources[key_path] = name
-
-    def _walk(self, key):
-        """
-        Walks through the segments of the key to return the last segment of the
-        key and the dict to retrieve it from.
-
-        :param str      key:    Nested path of key names
-        :rtype: tuple[dict, str]
-        """
-        parts = key.split(self._separator)
-
-        data = self._data
-        for part in parts[:-1]:
-            data = data[part]
-
-        return data, parts[-1]
-
     @classmethod
     def from_cache(cls, name):
         """
@@ -246,3 +140,123 @@ class Configuration(object):
         """
         with open(path) as f:
             return json.load(f)
+
+    def as_dict(self):
+        """
+        Returns a deep copy of the configuration in it's current state
+
+        :rtype: dict
+        """
+        from copy import deepcopy
+        return deepcopy(self._data)
+
+    def cache(self, name):
+        """
+        Caches the configuration under the given name. This can be retrieved
+        using the Configuration.from_cache() method.
+
+        :param str  name:
+        """
+        Configuration._caches[name] = self
+
+    def get(self, key):
+        """
+        Retrieves a value from the configuration. Can be a nested key joined
+        by the configuration separator (default '.').
+
+        :param str      key:    Nested path of key names
+        :return: Value stored at the given key location
+        """
+        data, key = self._walk(key)
+        return data[key]
+
+    def merge(self, data, name=None):
+        """
+        Writes the leaf keys of the data into the Configuration, overriding
+        conflicts. A name value can be provided as an identifier for where the
+        values originated. If omitted, an integer count is used instead.
+
+        :param dict     data:   Dictionary of data to merge in
+        :param object   name:   Identifier for the source data
+        """
+        self._merge(data, self._data, name or self._count)
+        self._count += 1
+
+    def set(self, key, value):
+        """
+        Sets a value in the configuration. This is not written to file and is
+        only stored as long as the Configuration instance is in scope.
+
+        :param str      key:    Nested path of key names
+        :param object   value:
+        """
+        data, key = self._walk(key)
+        data[key] = value
+
+    def source(self, key):
+        """
+        Returns the source identifier for the given key. If the key is not a
+        leaf key, then a list of sources that contributed to the data will be
+        returned.
+
+        :param str      key:    Nested path of key names
+        :return:
+            Return type varies based on the key type, and the given identifiers.
+            Leaf keys will return the identifier their data was provided with,
+            or the integer count if the identifier was None (see merge).
+            Non-leaf keys will return a list of all identifiers that contributed
+            to it's data.
+        """
+        try:
+            return self._sources[key]
+        except KeyError:
+            all_sources = []
+            for source_key, source_name in self._sources.items():
+                if source_key.startswith(key):
+                    all_sources.append(source_name)
+            return all_sources
+
+    def sources(self):
+        """
+        Return a dictionary mapping the source identifiers to all the leaf keys
+        it contributed to the current state.
+
+        :rtype: dict
+        """
+        sources = dict()
+        for nested_key, source_id in self._sources.items():
+            sources.setdefault(source_id, list()).append(nested_key)
+
+        return sources
+
+    def _merge(self, source, dest, name, path=''):
+        """
+        :param dict     source: Dictionary to merge from
+        :param dict     dest:   Dictionary to merge into
+        :param object   name:   Identifier for the source data
+        :param str      path:   Nested key path
+        """
+        for key, value in source.items():
+            key_path = path + self._separator + key if path else key
+            if isinstance(value, dict):
+                node = dest.setdefault(key, dict())
+                self._merge(value, node, name, key_path)
+            else:
+                dest[key] = value
+                self._sources[key_path] = name
+
+    def _walk(self, key):
+        """
+        Walks through the segments of the key to return the last segment of the
+        key and the dict to retrieve it from.
+
+        :param str      key:    Nested path of key names
+        :rtype: tuple[dict, str]
+        """
+        parts = key.split(self._separator)
+
+        data = self._data
+        for part in parts[:-1]:
+            data = data[part]
+
+        return data, parts[-1]
