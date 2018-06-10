@@ -1,0 +1,15 @@
+{
+   "#group": {
+     "+two": 4,
+     "three": 3
+   },
+  "+list": [
+    "three"
+  ],
+  "-list": [
+    "one"
+  ],
+  "?exists": true,
+  "?rabbit": "hops",
+  "!#cat": "meows"
+}
