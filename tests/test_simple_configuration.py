@@ -146,11 +146,11 @@ def test_source():
 
 
 def test_sources():
-    data1 = {'key1': 'value1', 'shared': 'value'}
-    data2 = {'key2': 'value2', 'shared': 'value'}
+    data1 = {'key1': 'value1', 'shared': 'value', 'sub_data': {'key2': 'value2'}}
+    data2 = {'key2': 'value2', 'shared': 'value', 'sub_data': 'leaf'}
     cfg = Configuration.from_dicts([data1, data2], ['one', 'two'])
     sources = cfg.sources()
-    assert sources['one'] == ['key1']
     # Order is not guaranteed, assert by set instead of list
-    assert set(sources['two']) == {'key2', 'shared'}
-    assert set(sources) == {'one', 'two'}
+    assert set(sources) == {'one', 'two'}, 'Missing source identifier(s)'
+    assert set(sources['one']) == {'key1'}
+    assert set(sources['two']) == {'key2', 'shared', 'sub_data'}

@@ -268,6 +268,12 @@ class Configuration(object):
                 node = dest.setdefault(key, {})
                 self._merge(value, node, name, key_path)
             else:
+                # If a leaf key replaces a dict, remove all sources that were lost
+                if isinstance(dest.get(key), dict):
+                    removed = {key for key in self._sources if key.startswith(key_path)}
+                    for key in removed:
+                        self._sources.pop(key, None)
+
                 dest[key] = value
                 self._sources[key_path] = name
 
