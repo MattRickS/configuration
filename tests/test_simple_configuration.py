@@ -59,6 +59,12 @@ def test_from_files(mock_config):
 # ============================================================================ #
 
 
+def test_as_dict():
+    data1 = {'key1': 'value1', 'sub_data': {'one': 1, 'two': 2}}
+    cfg = Configuration(data1)
+    assert cfg.as_dict() == data1
+
+
 def test_get():
     data1 = {'key1': 'value1', 'sub_data': {'one': 1, 'two': 2}}
     cfg = Configuration(data1)
