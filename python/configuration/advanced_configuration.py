@@ -427,21 +427,3 @@ class AdvancedConfiguration(Configuration):
 
         # reverse of the actual key
         return separated_key.true_key, separated_key.lock, action_index, mod_indexes
-
-
-if __name__ == '__main__':
-    def custom_method(orig, new):
-        return int(str(orig) + str(new))
-
-    AdvancedConfiguration.register_action('$', custom_method)
-
-    path1 = r'D:\Programming\configuration\examples\data1.json'
-    # path2 = r'D:\Programming\configuration\examples\data3.json'
-    custom_path = r'D:\Programming\configuration\examples\custom_data.json'
-    cfg = AdvancedConfiguration.from_files(path1, custom_path)
-    print(cfg.as_dict())
-    print(cfg.sources())
-    print(cfg.source('list'))
-    print(cfg.locked())
-    print(cfg.as_dict(True))
-    cfg.set('group.one', 'abc')
