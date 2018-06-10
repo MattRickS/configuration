@@ -57,7 +57,7 @@ class Configuration(object):
         :param str      separator:  String separator for nested keys
         """
         self._data = {}
-        self._count = 0
+        self._merge_order = []
         self._separator = separator
         self._sources = {}
 
@@ -80,7 +80,16 @@ class Configuration(object):
 
         :rtype: int
         """
-        return self._count
+        return len(self._merge_order)
+
+    @property
+    def merge_order(self):
+        """
+        List of data identifiers in the order they were merged
+
+        :rtype: list
+        """
+        return self._merge_order[:]
 
     @classmethod
     def from_cache(cls, name):
@@ -195,8 +204,9 @@ class Configuration(object):
         :param dict     data:   Dictionary of data to merge in
         :param object   name:   Identifier for the source data
         """
-        self._merge(data, self._data, name or self._count)
-        self._count += 1
+        identifier = name or len(self._merge_order)
+        self._merge(data, self._data, identifier)
+        self._merge_order.append(identifier)
 
     def set(self, key, value):
         """
@@ -239,9 +249,9 @@ class Configuration(object):
 
         :rtype: dict
         """
-        sources = {}
+        sources = {key: [] for key in self._merge_order}
         for nested_key, source_id in self._sources.items():
-            sources.setdefault(source_id, []).append(nested_key)
+            sources[source_id].append(nested_key)
 
         return sources
 

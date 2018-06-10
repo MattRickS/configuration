@@ -11,6 +11,29 @@ def mock_config(request):
 
 
 # ============================================================================ #
+#                                PROPERTIES                                    #
+# ============================================================================ #
+
+
+def test_merge_count():
+    data1 = {'a': 1}
+    data2 = {'b': 1}
+    data3 = {'c': 1}
+    cfg = Configuration.from_dicts([data1, data2], ['one', 'two'])
+    cfg.merge(data3, 'three')
+    assert cfg.merge_count == 3
+
+
+def test_merge_order():
+    data1 = {'a': 1}
+    data2 = {'b': 1}
+    data3 = {'c': 1}
+    cfg = Configuration.from_dicts([data1, data2], ['one', 'two'])
+    cfg.merge(data3, 'three')
+    assert cfg.merge_order == ['one', 'two', 'three']
+
+
+# ============================================================================ #
 #                               CLASS METHODS                                  #
 # ============================================================================ #
 
@@ -130,3 +153,4 @@ def test_sources():
     assert sources['one'] == ['key1']
     # Order is not guaranteed, assert by set instead of list
     assert set(sources['two']) == {'key2', 'shared'}
+    assert set(sources) == {'one', 'two'}
