@@ -164,6 +164,17 @@ class AdvancedConfiguration(Configuration):
         lock_pattern = '({})?'.format(cls.lock_symbol)
         cls.pattern = re.compile('^' + mod_pattern + meth_pattern + lock_pattern + '(\w+)' + '$')
 
+    def as_dict(self, keep_locks=False):
+        """
+        Returns a deep copy of the configuration in it's current state
+
+        :param bool keep_locks: If True, locked keys retain their locked symbol
+        :rtype: dict
+        """
+        if keep_locks:
+            return self._copy_with_locks(self._data)
+        return super(AdvancedConfiguration, self).as_dict()
+
     def is_locked(self, key):
         """
         Returns a boolean for whether or not the key is considered locked.
@@ -260,6 +271,31 @@ class AdvancedConfiguration(Configuration):
             if not modifier(sep_key.action, sep_key.true_key, existing_value, new_value):
                 return False
         return True
+
+    def _copy_with_locks(self, data, new_data=None, path=None):
+        """
+        Recursively copies the given data into a new dict, adding the lock
+        symbol to any locked keys.
+
+        :param dict data:       Dictionary to copy
+        :param dict new_data:   Dictionary to copy to
+        :param str  path:       String path to the current data
+        :rtype: dict
+        """
+        if new_data is None:
+            new_data = {}
+        for key, val in data.items():
+            curr_path = key if path is None else self._separator.join([path, key])
+            if curr_path in self._locked:
+                key = self.lock_symbol + key
+            if isinstance(val, dict):
+                # Create a blank dict to copy into
+                val_copy = {}
+                new_data[key] = val_copy
+                self._copy_with_locks(val, val_copy, curr_path)
+            else:
+                new_data[key] = val
+        return new_data
 
     def _get_locked_key(self, key):
         """
@@ -386,4 +422,5 @@ if __name__ == '__main__':
     print(cfg.sources())
     print(cfg.source('list'))
     print(cfg.locked())
+    print(cfg.as_dict(True))
     cfg.set('group.one', 'abc')
