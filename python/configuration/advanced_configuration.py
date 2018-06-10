@@ -5,6 +5,7 @@ from configuration.simple_configuration import Configuration
 
 '''
 Merge methods:
+    = : Copies the original existing values unchanged. Useful when locking.
     + : Adds the value to existing values, sets the value if it doesn't exist
     - : Removes the value from existing values if it exists
 
@@ -50,6 +51,10 @@ def _add(orig, new):
     return orig + new
 
 
+def _copy(orig, new):
+    return orig
+
+
 def _subtract(orig, new):
     if isinstance(orig, list):
         if isinstance(new, list):
@@ -60,8 +65,7 @@ def _subtract(orig, new):
     elif isinstance(orig, (int, float)):
         orig -= new
     elif isinstance(orig, str):
-        if orig.endswith(new):
-            orig = orig[:-len(new)]
+        orig = orig.replace(new, '')
     return orig
 
 
@@ -81,12 +85,13 @@ class AdvancedConfiguration(Configuration):
     _actions = {
         '+': _add,
         '-': _subtract,
+        '=': _copy,
     }
     _modifiers = {
         '!': _not_exists,
         '?': _exists,
     }
-    _ordering = list('+-!?')
+    _ordering = list('=+-!?')
     lock_symbol = '#'
     pattern = None
 
@@ -96,9 +101,9 @@ class AdvancedConfiguration(Configuration):
         :param object   name:       Identifier for the seed data
         :param str      separator:  String separator for nested keys
         """
-        super(AdvancedConfiguration, self).__init__(data, name, separator)
         self._locked = set()
         self.__pending_lock = set()
+        super(AdvancedConfiguration, self).__init__(data, name, separator)
 
     @classmethod
     def register_action(cls, symbol, func, force=False, index_order=None):
@@ -186,9 +191,9 @@ class AdvancedConfiguration(Configuration):
 
     def locked(self):
         """
-        :rtype: set
+        :rtype: list
         """
-        return self._locked.copy()
+        return list(self._locked)
 
     def lock_key(self, key):
         """
@@ -251,9 +256,10 @@ class AdvancedConfiguration(Configuration):
 
         :rtype: dict
         """
-        sources = {}
+        sources = {key: [] for key in self._merge_order}
         for nested_key, source_list in self._sources.items():
-            sources.setdefault(source_list[-1], []).append(nested_key)
+            last_identifier = source_list[-1]
+            sources[last_identifier].append(nested_key)
 
         return sources
 
