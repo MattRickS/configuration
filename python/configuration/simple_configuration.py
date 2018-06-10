@@ -66,6 +66,15 @@ class Configuration(object):
     def __setitem__(self, key, value):
         self.set(key, value)
 
+    @property
+    def merge_count(self):
+        """
+        Number of dictionaries that have been merged together
+
+        :rtype: int
+        """
+        return self._count
+
     @classmethod
     def from_cache(cls, name):
         """
